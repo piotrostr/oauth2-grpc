@@ -7,6 +7,7 @@ import (
 	"github.com/piotrostr/oauth2-grpc/api"
 	pb "github.com/piotrostr/oauth2-grpc/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 	opts := []grpc.ServerOption{}
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterAuthServiceServer(grpcServer, authService)
+	reflection.Register(grpcServer)
 	log.Println("Serving on port 50051")
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("error while serving: %v", err)
