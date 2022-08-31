@@ -1,0 +1,28 @@
+syntax = "proto3";
+package auth;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/piotrostr/oauth2-grpc/proto";
+
+service AuthService {
+  rpc CreateAccount(UserDetails) returns (Token) {}
+  rpc Authenticate(Credentials) returns (Token) {}
+}
+
+message UserDetails {
+  Credentials credentials = 1;
+  optional string email = 3;
+  optional string first_name = 4;
+  optional string last_name = 5;
+}
+
+message Credentials {
+  string username = 1;
+  string password = 2;
+}
+
+message Token {
+  string access_token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
