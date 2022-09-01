@@ -19,6 +19,11 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+const (
+	Host        = "localhost"
+	SwaggerPath = "./proto/auth.swagger.json"
+)
+
 var ctx = context.Background()
 
 func grpcHandler(
@@ -80,7 +85,7 @@ func runHttp(addr string, grpcServer *grpc.Server, listener net.Listener) {
 		w http.ResponseWriter,
 		req *http.Request,
 	) {
-		f, err := os.ReadFile("./proto/auth.swagger.json")
+		f, err := os.ReadFile(SwaggerPath)
 		if err != nil {
 			msg := "Error reading swagger file: %v"
 			fmt.Fprintf(w, msg, err)
@@ -122,23 +127,23 @@ func main() {
 	shouldRunHttp := flag.Bool("http", false, "enable http server")
 	flag.Parse()
 
-	addr := fmt.Sprintf("localhost:%d", *port)
+	addr := fmt.Sprintf("%s:%d", Host, *port)
 
 	if *shouldRunAsClient {
 		runClient(addr)
 		return
 	}
 
-	authService := api.NewAuthService()
+	// grab yourself a port
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 	log.Printf("Listening on %s", addr)
 
-	// TODO add TLS (or ATLS)
-	opts := []grpc.ServerOption{}
-	grpcServer := grpc.NewServer(opts...)
+	authService := api.NewAuthService()
+	grpcServer := api.NewGRPCServer()
+
 	pb.RegisterAuthServiceServer(grpcServer, authService)
 	reflection.Register(grpcServer)
 

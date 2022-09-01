@@ -6,6 +6,12 @@ import (
 
 	pb "github.com/piotrostr/oauth2-grpc/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+)
+
+const (
+	CertificatePath = "./certs/cert.pem"
+	KeyPath         = "./certs/key.pem"
 )
 
 type Client struct {
@@ -14,7 +20,11 @@ type Client struct {
 }
 
 func NewClient(url string) *Client {
-	conn, err := grpc.Dial(url, grpc.WithInsecure())
+	creds, err := credentials.NewClientTLSFromFile("", "")
+	if err != nil {
+		log.Fatalf("could not load tls cert: %s", err)
+	}
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Fatalln(err)
 	}
