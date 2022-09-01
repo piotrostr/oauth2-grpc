@@ -15,6 +15,7 @@ import (
 	"github.com/piotrostr/oauth2-grpc/api"
 	pb "github.com/piotrostr/oauth2-grpc/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -61,24 +62,34 @@ func main() {
 	if *shouldRunHttp {
 		// Add HTTP router with a route for swagger.json specification
 		mux := http.NewServeMux()
-		swaggerHandleFunc := func(w http.ResponseWriter, req *http.Request) {
-			f, err := os.ReadFile("/proto/auth.swagger.json")
+		swaggerHandler := func(
+			w http.ResponseWriter,
+			req *http.Request,
+		) {
+			f, err := os.ReadFile("./proto/auth.swagger.json")
 			if err != nil {
-				fmt.Fprintf(w, "Error reading swagger file: %v", err)
+				msg := "Error reading swagger file: %v"
+				fmt.Fprintf(w, msg, err)
 			}
 			io.Copy(w, strings.NewReader(string(f)))
 		}
-		mux.HandleFunc("/swagger.json", swaggerHandleFunc)
+		mux.HandleFunc("/swagger.json", swaggerHandler)
 
 		gatewayMux := runtime.NewServeMux()
+		dopts := []grpc.DialOption{
+			grpc.WithTransportCredentials(
+				insecure.NewCredentials(),
+			),
+		}
 		err = pb.RegisterAuthServiceHandlerFromEndpoint(
 			ctx,
 			gatewayMux,
 			addr,
-			nil, // Dial Options
+			dopts,
 		)
 		if err != nil {
-			log.Fatalf("Failed to register AuthServiceHandlerClient: %v", err)
+			msg := "Error registering AuthServiceHandlerClient: %v"
+			log.Fatalf(msg, err)
 		}
 		mux.Handle("/", gatewayMux)
 
@@ -87,7 +98,7 @@ func main() {
 			Handler: grpcHandler(grpcServer, mux),
 		}
 		log.Println("Serving HTTP and gRPC")
-		err = httpServer.ListenAndServe()
+		err = httpServer.Serve(listener)
 	} else {
 		log.Println("Serving gRPC")
 		err = grpcServer.Serve(listener)
