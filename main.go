@@ -40,11 +40,28 @@ func grpcHandler(
 }
 
 func main() {
+	shouldRunAsClient := flag.Bool("client", false, "run as client")
 	port := flag.Int("port", 50051, "port to listen on")
 	shouldRunHttp := flag.Bool("enable-http", false, "enable http server")
 	flag.Parse()
 
 	addr := fmt.Sprintf("localhost:%d", *port)
+
+	if *shouldRunAsClient {
+		client := api.NewClient(addr)
+		userDetails := &pb.UserDetails{
+			Credentials: &pb.Credentials{
+				Username: "piotrostr",
+				Password: "password",
+			},
+		}
+		token, err := client.CreateAccount(ctx, userDetails)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		log.Println(token)
+		return
+	}
 
 	authService := api.NewAuthService()
 	listener, err := net.Listen("tcp", addr)

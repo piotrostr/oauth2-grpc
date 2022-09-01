@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log"
 
 	pb "github.com/piotrostr/oauth2-grpc/proto"
@@ -17,17 +18,22 @@ func NewClient(url string) *Client {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	defer conn.Close()
 	return &Client{
 		conn:       conn,
 		authClient: pb.NewAuthServiceClient(conn),
 	}
 }
 
-func (c *Client) Authenticate(credentials *pb.Credentials) {
-	c.Authenticate(credentials)
+func (c *Client) Authenticate(
+	ctx context.Context,
+	credentials *pb.Credentials,
+) (*pb.Token, error) {
+	return c.authClient.Authenticate(ctx, credentials)
 }
 
-func (c *Client) CreateAccount(userDetails *pb.UserDetails) {
-	c.CreateAccount(userDetails)
+func (c *Client) CreateAccount(
+	ctx context.Context,
+	userDetails *pb.UserDetails,
+) (*pb.Token, error) {
+	return c.authClient.CreateAccount(ctx, userDetails)
 }
