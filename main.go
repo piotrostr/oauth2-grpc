@@ -39,27 +39,93 @@ func grpcHandler(
 	})
 }
 
+// runClient runs a test client to check if grpc server works as intended
+func runClient(addr string) {
+	client := api.NewClient(addr)
+	userDetails := &pb.UserDetails{
+		Credentials: &pb.Credentials{
+			Username: "piotrostr",
+			Password: "password",
+		},
+	}
+
+	// create account (overwrite if exists)
+	token, err := client.CreateAccount(ctx, userDetails)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Println(token)
+
+	// authenticate
+	token, err = client.Authenticate(ctx, userDetails.Credentials)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Println(token)
+
+	// check if login fails with false credentials
+	token, err = client.Authenticate(ctx, &pb.Credentials{
+		Username: "piotrostr",
+		Password: "wrongpassword",
+	})
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func runHttp(addr string, grpcServer *grpc.Server, listener net.Listener) {
+	// Add HTTP router with a route for swagger.json specification
+	mux := http.NewServeMux()
+	swaggerHandler := func(
+		w http.ResponseWriter,
+		req *http.Request,
+	) {
+		f, err := os.ReadFile("./proto/auth.swagger.json")
+		if err != nil {
+			msg := "Error reading swagger file: %v"
+			fmt.Fprintf(w, msg, err)
+		}
+		io.Copy(w, strings.NewReader(string(f)))
+	}
+	mux.HandleFunc("/swagger.json", swaggerHandler)
+
+	gatewayMux := runtime.NewServeMux()
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	err := pb.RegisterAuthServiceHandlerFromEndpoint(
+		ctx,
+		gatewayMux,
+		addr,
+		dopts,
+	)
+	if err != nil {
+		msg := "Error registering AuthServiceHandlerClient: %v"
+		log.Fatalf(msg, err)
+	}
+	mux.Handle("/", gatewayMux)
+
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: grpcHandler(grpcServer, mux),
+	}
+	log.Println("Serving HTTP and gRPC")
+	err = httpServer.Serve(listener)
+	if err != nil {
+		log.Fatalf("Error while serving: %v", err)
+	}
+}
+
 func main() {
-	shouldRunAsClient := flag.Bool("client", false, "run as client")
 	port := flag.Int("port", 50051, "port to listen on")
-	shouldRunHttp := flag.Bool("enable-http", false, "enable http server")
+	shouldRunAsClient := flag.Bool("client", false, "run as client")
+	shouldRunHttp := flag.Bool("http", false, "enable http server")
 	flag.Parse()
 
 	addr := fmt.Sprintf("localhost:%d", *port)
 
 	if *shouldRunAsClient {
-		client := api.NewClient(addr)
-		userDetails := &pb.UserDetails{
-			Credentials: &pb.Credentials{
-				Username: "piotrostr",
-				Password: "password",
-			},
-		}
-		token, err := client.CreateAccount(ctx, userDetails)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		log.Println(token)
+		runClient(addr)
 		return
 	}
 
@@ -76,51 +142,19 @@ func main() {
 	pb.RegisterAuthServiceServer(grpcServer, authService)
 	reflection.Register(grpcServer)
 
+	// TODO this doesn't work due to a certificate error (including the
+	// example implementation on github.com/philips/grpc-gateway)
 	if *shouldRunHttp {
-		// Add HTTP router with a route for swagger.json specification
-		mux := http.NewServeMux()
-		swaggerHandler := func(
-			w http.ResponseWriter,
-			req *http.Request,
-		) {
-			f, err := os.ReadFile("./proto/auth.swagger.json")
-			if err != nil {
-				msg := "Error reading swagger file: %v"
-				fmt.Fprintf(w, msg, err)
-			}
-			io.Copy(w, strings.NewReader(string(f)))
-		}
-		mux.HandleFunc("/swagger.json", swaggerHandler)
-
-		gatewayMux := runtime.NewServeMux()
-		dopts := []grpc.DialOption{
-			grpc.WithTransportCredentials(
-				insecure.NewCredentials(),
-			),
-		}
-		err = pb.RegisterAuthServiceHandlerFromEndpoint(
-			ctx,
-			gatewayMux,
-			addr,
-			dopts,
-		)
-		if err != nil {
-			msg := "Error registering AuthServiceHandlerClient: %v"
-			log.Fatalf(msg, err)
-		}
-		mux.Handle("/", gatewayMux)
-
-		httpServer := &http.Server{
-			Addr:    addr,
-			Handler: grpcHandler(grpcServer, mux),
-		}
-		log.Println("Serving HTTP and gRPC")
-		err = httpServer.Serve(listener)
-	} else {
-		log.Println("Serving gRPC")
-		err = grpcServer.Serve(listener)
+		runHttp(addr, grpcServer, listener)
 	}
+
+	log.Println("Serving gRPC")
+	err = grpcServer.Serve(listener)
 	if err != nil {
 		log.Fatalf("Error while serving: %v", err)
 	}
+}
+
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
