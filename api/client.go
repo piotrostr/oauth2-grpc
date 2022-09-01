@@ -15,20 +15,31 @@ type Client struct {
 }
 
 func NewClient(url string) *Client {
-	creds, err := credentials.NewClientTLSFromFile(
-		CertificatePath,
-		"", // serverNameOverride
-	)
-	if err != nil {
-		log.Fatalf("could not load tls cert: %s", err)
-	}
-	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(creds))
-	if err != nil {
-		log.Fatalln(err)
-	}
-	return &Client{
-		conn:       conn,
-		authClient: pb.NewAuthServiceClient(conn),
+	if UseTLS {
+		creds, err := credentials.NewClientTLSFromFile(
+			CertificatePath,
+			"", // serverNameOverride
+		)
+		if err != nil {
+			log.Fatalf("could not load tls cert: %s", err)
+		}
+		conn, err := grpc.Dial(url, grpc.WithTransportCredentials(creds))
+		if err != nil {
+			log.Fatalln(err)
+		}
+		return &Client{
+			conn:       conn,
+			authClient: pb.NewAuthServiceClient(conn),
+		}
+	} else {
+		conn, err := grpc.Dial(url, grpc.WithInsecure())
+		if err != nil {
+			log.Fatalln(err)
+		}
+		return &Client{
+			conn:       conn,
+			authClient: pb.NewAuthServiceClient(conn),
+		}
 	}
 }
 

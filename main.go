@@ -54,21 +54,21 @@ func runClient(addr string) {
 		},
 	}
 
-	// create account (overwrite if exists)
+	// Create account (overwrite if exists)
 	token, err := client.CreateAccount(ctx, userDetails)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	log.Println(token)
 
-	// authenticate
+	// Authenticate
 	token, err = client.Authenticate(ctx, userDetails.Credentials)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	log.Println(token)
 
-	// check if login fails with false credentials
+	// Check if login fails with false credentials
 	_, err = client.Authenticate(ctx, &pb.Credentials{
 		Username: "piotrostr",
 		Password: "wrongpassword",
