@@ -5,11 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/golang/glog"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/piotrostr/oauth2-grpc/api"
@@ -31,12 +32,10 @@ func grpcHandler(
 	httpHandler http.Handler,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var grpcContentType bool = strings.Contains(
+		if r.ProtoMajor == 2 && strings.Contains(
 			r.Header.Get("Content-Type"),
 			"application/grpc",
-		)
-
-		if r.ProtoMajor == 2 && grpcContentType {
+		) {
 			grpcServer.ServeHTTP(w, r)
 		} else {
 			httpHandler.ServeHTTP(w, r)
@@ -57,24 +56,24 @@ func runClient(addr string) {
 	// Create account (overwrite if exists)
 	token, err := client.CreateAccount(ctx, userDetails)
 	if err != nil {
-		log.Fatalln(err)
+		glog.Fatalln(err)
 	}
-	log.Println(token)
+	glog.Infoln(token)
 
 	// Authenticate
 	token, err = client.Authenticate(ctx, userDetails.Credentials)
 	if err != nil {
-		log.Fatalln(err)
+		glog.Fatalln(err)
 	}
-	log.Println(token)
+	glog.Infoln(token)
 
-	// Check if login fails with false credentials
+	// Check if glogin fails with false credentials
 	_, err = client.Authenticate(ctx, &pb.Credentials{
 		Username: "piotrostr",
 		Password: "wrongpassword",
 	})
 	if err != nil {
-		log.Println(err)
+		glog.Infoln(err)
 	}
 }
 
@@ -110,7 +109,7 @@ func runHttp(addr string, grpcServer *grpc.Server, listener net.Listener) {
 	)
 	if err != nil {
 		msg := "Error registering AuthServiceHandlerClient: %v"
-		log.Fatalf(msg, err)
+		glog.Fatalf(msg, err)
 	}
 	mux.Handle("/", gatewayMux)
 
@@ -118,10 +117,10 @@ func runHttp(addr string, grpcServer *grpc.Server, listener net.Listener) {
 		Addr:    addr,
 		Handler: grpcHandler(grpcServer, mux),
 	}
-	log.Println("Serving HTTP and gRPC")
+	glog.Infoln("Serving HTTP and gRPC")
 	err = httpServer.Serve(listener)
 	if err != nil {
-		log.Fatalf("Error while serving: %v", err)
+		glog.Fatalf("Error while serving: %v", err)
 	}
 }
 
@@ -141,9 +140,9 @@ func main() {
 	// grab yourself a port
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		glog.Fatalf("Failed to listen: %v", err)
 	}
-	log.Printf("Listening on %s", addr)
+	glog.Infof("Listening on %s", addr)
 
 	authService := api.NewAuthService()
 	grpcServer := api.NewGRPCServer()
@@ -157,13 +156,9 @@ func main() {
 		runHttp(addr, grpcServer, listener)
 	}
 
-	log.Println("Serving gRPC")
+	glog.Infoln("Serving gRPC")
 	err = grpcServer.Serve(listener)
 	if err != nil {
-		log.Fatalf("Error while serving: %v", err)
+		glog.Fatalf("Error while serving: %v", err)
 	}
-}
-
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
