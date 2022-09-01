@@ -7,9 +7,9 @@ fi
 
 echo "Generating Certificate"
 openssl req -x509 \
-  -newkey rsa:4096 \
-  -keyout certs/key.pem \
-  -out certs/cert.pem \
+  -newkey rsa:2048 \
+  -keyout certs/server.key \
+  -out certs/server.crt \
   -sha256 \
   -subj "/CN=localhost" \
   -days 365

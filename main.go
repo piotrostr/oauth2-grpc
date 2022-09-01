@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	Host        = "localhost"
-	SwaggerPath = "./proto/auth.swagger.json"
+	Host        string = "localhost"
+	SwaggerPath string = "./proto/auth.swagger.json"
 )
 
 var ctx = context.Background()

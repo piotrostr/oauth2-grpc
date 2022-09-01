@@ -9,18 +9,16 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-const (
-	CertificatePath = "./certs/cert.pem"
-	KeyPath         = "./certs/key.pem"
-)
-
 type Client struct {
 	conn       *grpc.ClientConn
 	authClient pb.AuthServiceClient
 }
 
 func NewClient(url string) *Client {
-	creds, err := credentials.NewClientTLSFromFile("", "")
+	creds, err := credentials.NewClientTLSFromFile(
+		CertificatePath,
+		"", // serverNameOverride
+	)
 	if err != nil {
 		log.Fatalf("could not load tls cert: %s", err)
 	}
