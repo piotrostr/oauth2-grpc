@@ -25,8 +25,6 @@ type AuthService struct {
 	users map[string]*pb.UserDetails
 }
 
-var ctx = context.Background()
-
 func NewAuthService() *AuthService {
 	return &AuthService{
 		users: make(map[string]*pb.UserDetails),

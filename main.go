@@ -69,7 +69,7 @@ func runClient(addr string) {
 	log.Println(token)
 
 	// check if login fails with false credentials
-	token, err = client.Authenticate(ctx, &pb.Credentials{
+	_, err = client.Authenticate(ctx, &pb.Credentials{
 		Username: "piotrostr",
 		Password: "wrongpassword",
 	})
@@ -90,7 +90,11 @@ func runHttp(addr string, grpcServer *grpc.Server, listener net.Listener) {
 			msg := "Error reading swagger file: %v"
 			fmt.Fprintf(w, msg, err)
 		}
-		io.Copy(w, strings.NewReader(string(f)))
+		_, err = io.Copy(w, strings.NewReader(string(f)))
+		if err != nil {
+			msg := "Error copying over swagger file: %v"
+			fmt.Fprintf(w, msg, err)
+		}
 	}
 	mux.HandleFunc("/swagger.json", swaggerHandler)
 
