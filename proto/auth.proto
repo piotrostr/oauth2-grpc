@@ -1,13 +1,25 @@
 syntax = "proto3";
 package auth;
 
+import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/piotrostr/oauth2-grpc/proto";
 
+
 service AuthService {
-  rpc CreateAccount(UserDetails) returns (Token) {}
-  rpc Authenticate(Credentials) returns (Token) {}
+  rpc CreateAccount(UserDetails) returns (Token) {
+    option (google.api.http) = {
+      post: "/v1/auth/create"
+      body: "*"
+    };
+  }
+  rpc Authenticate(Credentials) returns (Token) {
+    option (google.api.http) = {
+      post: "/v1/auth/authenticate"
+      body: "*"
+    };
+  }
 }
 
 message UserDetails {
