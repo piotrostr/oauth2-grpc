@@ -1,5 +1,5 @@
 syntax = "proto3";
-package auth;
+package grpc.auth;
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
