@@ -5,12 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/golang/glog"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/piotrostr/oauth2-grpc/api"
@@ -20,12 +19,16 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-const (
-	Host        string = "localhost"
-	SwaggerPath string = "./proto/auth.swagger.json"
-)
+const SwaggerPath string = "./proto/auth.swagger.json"
 
 var ctx = context.Background()
+
+var (
+	host              = flag.String("host", "localhost", "host")
+	port              = flag.Int("port", 50051, "port to listen on")
+	shouldRunAsClient = flag.Bool("client", false, "run as client")
+	shouldRunHttp     = flag.Bool("http", false, "enable http server")
+)
 
 func grpcHandler(
 	grpcServer *grpc.Server,
@@ -56,109 +59,101 @@ func runClient(addr string) {
 	// Create account (overwrite if exists)
 	token, err := client.CreateAccount(ctx, userDetails)
 	if err != nil {
-		glog.Fatalln(err)
+		log.Fatalln(err)
 	}
-	glog.Infoln(token)
+	log.Println(token)
 
 	// Authenticate
 	token, err = client.Authenticate(ctx, userDetails.Credentials)
 	if err != nil {
-		glog.Fatalln(err)
+		log.Fatalln(err)
 	}
-	glog.Infoln(token)
+	log.Println(token)
 
-	// Check if glogin fails with false credentials
+	// Check if login fails with false credentials
 	_, err = client.Authenticate(ctx, &pb.Credentials{
 		Username: "piotrostr",
 		Password: "wrongpassword",
 	})
 	if err != nil {
-		glog.Infoln(err)
+		log.Println(err)
 	}
 }
 
-func runHttp(addr string, grpcServer *grpc.Server, listener net.Listener) {
-	// Add HTTP router with a route for swagger.json specification
-	mux := http.NewServeMux()
-	swaggerHandler := func(
-		w http.ResponseWriter,
-		req *http.Request,
-	) {
-		f, err := os.ReadFile(SwaggerPath)
-		if err != nil {
-			msg := "Error reading swagger file: %v"
-			fmt.Fprintf(w, msg, err)
-		}
-		_, err = io.Copy(w, strings.NewReader(string(f)))
-		if err != nil {
-			msg := "Error copying over swagger file: %v"
-			fmt.Fprintf(w, msg, err)
-		}
+func swaggerHandlerFunc(
+	w http.ResponseWriter,
+	req *http.Request,
+) {
+	f, err := os.ReadFile(SwaggerPath)
+	if err != nil {
+		msg := "Error reading swagger file: %v"
+		fmt.Fprintf(w, msg, err)
 	}
-	mux.HandleFunc("/swagger.json", swaggerHandler)
+	_, err = io.Copy(w, strings.NewReader(string(f)))
+	if err != nil {
+		msg := "Error copying over swagger file: %v"
+		fmt.Fprintf(w, msg, err)
+	}
+}
 
-	gatewayMux := runtime.NewServeMux()
-	dopts := []grpc.DialOption{
+// Create reverse proxy entrypoint, bind grpcServer and serve RPC and HTTP
+func runHttp(addr string) {
+	mux := runtime.NewServeMux()
+	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 	err := pb.RegisterAuthServiceHandlerFromEndpoint(
 		ctx,
-		gatewayMux,
+		mux,
 		addr,
-		dopts,
+		opts,
 	)
 	if err != nil {
 		msg := "Error registering AuthServiceHandlerClient: %v"
-		glog.Fatalf(msg, err)
+		log.Fatalf(msg, err)
 	}
-	mux.Handle("/", gatewayMux)
 
-	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: grpcHandler(grpcServer, mux),
-	}
-	glog.Infoln("Serving HTTP and gRPC")
-	err = httpServer.Serve(listener)
-	if err != nil {
-		glog.Fatalf("Error while serving: %v", err)
+	addr = ":8081"
+	log.Printf("Serving HTTP on %s", addr)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatalf("Error while serving: %v", err)
 	}
 }
 
-func main() {
-	port := flag.Int("port", 50051, "port to listen on")
-	shouldRunAsClient := flag.Bool("client", false, "run as client")
-	shouldRunHttp := flag.Bool("http", false, "enable http server")
-	flag.Parse()
-
-	addr := fmt.Sprintf("%s:%d", Host, *port)
-
-	if *shouldRunAsClient {
-		runClient(addr)
-		return
-	}
-
-	// grab yourself a port
+func run(addr string) {
+	// Grab yourself a port
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		glog.Fatalf("Failed to listen: %v", err)
+		log.Fatalf("Failed to listen: %v", err)
 	}
-	glog.Infof("Listening on %s", addr)
 
 	authService := api.NewAuthService()
 	grpcServer := api.NewGRPCServer()
 
 	pb.RegisterAuthServiceServer(grpcServer, authService)
 	reflection.Register(grpcServer)
-
-	// TODO this doesn't work due to a certificate error (including the
-	// example implementation on github.com/philips/grpc-gateway)
-	if *shouldRunHttp {
-		runHttp(addr, grpcServer, listener)
-	}
-
-	glog.Infoln("Serving gRPC")
+	log.Println("Serving gRPC")
 	err = grpcServer.Serve(listener)
 	if err != nil {
-		glog.Fatalf("Error while serving: %v", err)
+		log.Fatalf("Error while serving: %v", err)
 	}
+}
+
+func main() {
+	flag.Parse()
+
+	addr := fmt.Sprintf("%s:%d", *host, *port)
+	log.Printf("Grabbing %s for gRPC\n", addr)
+
+	if *shouldRunAsClient {
+		runClient(addr)
+		return
+	}
+
+	if *shouldRunHttp {
+		runHttp(addr)
+		return
+	}
+
+	run(addr)
 }
